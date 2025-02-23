@@ -1,0 +1,239 @@
+<template>
+  <div class="login">
+    <div class="left-wrap">
+      <left-view></left-view>
+    </div>
+    <div class="right-wrap">
+      <div class="top-right-wrap">
+        <div class="btn theme-btn" @click="toggleTheme">
+          <i class="iconfont-sys">
+            {{ isDark ? '&#xe6b5;' : '&#xe725;' }}
+          </i>
+        </div>
+        <el-dropdown @command="changeLanguage">
+          <div class="btn language-btn">
+            <i class="iconfont-sys">&#xe611;</i>
+          </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <div class="lang-btn-item">
+                <el-dropdown-item command="zh">
+                  <span class="menu-txt">简体中文</span>
+                  <i v-if="locale === 'zh'" class="iconfont-sys">&#xe621;</i>
+                </el-dropdown-item>
+              </div>
+              <div class="lang-btn-item">
+                <el-dropdown-item command="en">
+                  <span class="menu-txt">English</span>
+                  <i v-if="locale === 'en'" class="iconfont-sys">&#xe621;</i>
+                </el-dropdown-item>
+              </div>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+      <div class="header">
+        <svg class="icon" aria-hidden="true">
+          <use xlink:href="#iconsys-zhaopian-copy"></use>
+        </svg>
+        <h1>{{ systemName }}</h1>
+      </div>
+      <div class="login-wrap">
+        <div class="form">
+          <h3 class="title">{{ $t('login.title') }}</h3>
+          <p class="sub-title">{{ $t('login.subTitle') }}</p>
+          <el-form
+            ref="formRef"
+            :model="formData"
+            :rules="rules"
+            @keyup.enter="handleSubmit"
+            style="margin-top: 25px"
+          >
+            <el-form-item prop="username">
+              <el-input
+                :placeholder="$t('login.placeholder[0]')"
+                size="large"
+                v-model.trim="formData.username"
+              />
+            </el-form-item>
+            <el-form-item prop="password">
+              <el-input
+                :placeholder="$t('login.placeholder[1]')"
+                size="large"
+                v-model.trim="formData.password"
+                type="password"
+                radius="8px"
+                autocomplete="off"
+              />
+            </el-form-item>
+            <div class="drag-verify">
+              <div class="drag-verify-content" :class="{ error: !isPassing && isClickPass }">
+                <!-- :background="isDark ? '#181818' : '#eee'" -->
+                <DragVerify
+                  ref="dragVerify"
+                  v-model:value="isPassing"
+                  :width="width < 500 ? 328 : 438"
+                  :text="$t('login.sliderText')"
+                  textColor="var(--art-gray-800)"
+                  :successText="$t('login.sliderSuccessText')"
+                  :progressBarBg="getCssVariable('--el-color-primary')"
+                  background="var(--art-gray-200)"
+                  handlerBg="var(--art-main-bg-color)"
+                  @pass="onPass"
+                />
+              </div>
+              <p class="error-text" :class="{ 'show-error-text': !isPassing && isClickPass }">{{
+                  $t('login.placeholder[2]')
+                }}</p>
+            </div>
+
+            <div class="forget-password">
+              <el-checkbox v-model="formData.rememberPassword"
+              >{{ $t('login.rememberPwd') }}
+              </el-checkbox>
+              <router-link class="custom-text" to="/forget-password"
+              >{{ $t('login.forgetPwd') }}
+              </router-link>
+            </div>
+
+            <div style="margin-top: 30px">
+              <el-button
+                class="login-btn"
+                size="large"
+                type="primary"
+                @click="handleSubmit"
+                :loading="loading"
+              >
+                {{ $t('login.btnText') }}
+              </el-button>
+            </div>
+
+            <div class="footer">
+              <p>
+                {{ $t('login.noAccount') }}
+                <router-link class="custom-text" to="/register"
+                >{{ $t('login.register') }}
+                </router-link>
+              </p>
+            </div>
+          </el-form>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+  import LeftView from '@/components/Pages/Login/LeftView.vue'
+  import { SystemInfo } from '@/config/setting'
+  import { ElMessage, ElNotification } from 'element-plus'
+  import { useUserStore } from '@/store/modules/user'
+  import { HOME_PAGE } from '@/router'
+  import { getCssVariable } from '@/utils/utils'
+  import { LanguageEnum, SystemThemeEnum } from '@/enums/appEnum'
+  import { useI18n } from 'vue-i18n'
+  import { UserService } from '@/api/admin/usersApi'
+
+  const { t } = useI18n()
+  import { useSettingStore } from '@/store/modules/setting'
+  import type { FormInstance, FormRules } from 'element-plus'
+
+  const userStore = useUserStore()
+  const menuStore = useMenuStore()
+  const router = useRouter()
+  const isPassing = ref(false)
+  const isClickPass = ref(false)
+
+  const systemName = SystemInfo.name
+  const formRef = ref<FormInstance>()
+  const formData = reactive({
+    username: SystemInfo.login.username,
+    password: SystemInfo.login.password,
+    rememberPassword: true
+  })
+
+  const rules = computed<FormRules>(() => ({
+    username: [{ required: true, message: t('login.placeholder[0]'), trigger: 'blur' }],
+    password: [{ required: true, message: t('login.placeholder[1]'), trigger: 'blur' }]
+  }))
+
+  const loading = ref(false)
+  const { width } = useWindowSize()
+
+  const store = useSettingStore()
+  const isDark = computed(() => store.isDark)
+
+  const onPass = () => {
+  }
+
+  const handleSubmit = async () => {
+    if (!formRef.value) return
+
+    await formRef.value.validate(async (valid) => {
+      if (valid) {
+        if (!isPassing.value) {
+          isClickPass.value = true
+          return
+        }
+        loading.value = true
+        try {
+          // 调用登录接口
+          const res = await UserService.login({
+            username: formData.username,
+            password: formData.password
+          })
+
+          if (res.code === 200) {
+            userStore.setUserInfo(res.data)
+            userStore.setLoginStatus(true)
+            showLoginSuccessNotice()
+            await router.push(HOME_PAGE)
+          } else {
+            ElMessage.error(res.message || '登录失败')
+          }
+        } catch (error: any) {
+          console.error('登录失败:', error)
+          ElMessage.error(error.message || '登录失败')
+        } finally {
+          loading.value = false
+        }
+      }
+    })
+  }
+
+  // 登录成功提示
+  const showLoginSuccessNotice = () => {
+    setTimeout(() => {
+      ElNotification({
+        title: t('login.success.title'),
+        type: 'success',
+        showClose: false,
+        duration: 2500,
+        zIndex: 10000,
+        message: `${t('login.success.message')}, ${systemName}!`
+      })
+    }, 300)
+  }
+
+  // 切换语言
+  const { locale } = useI18n()
+
+  const changeLanguage = (lang: LanguageEnum) => {
+    locale.value = lang
+    userStore.setLanguage(lang)
+  }
+
+  // 切换主题
+  import { useTheme } from '@/composables/useTheme'
+  import { useMenuStore } from '@/store/modules/menu'
+  // import { LoginParams } from '@/api/model/loginModel'
+
+  const toggleTheme = () => {
+    let { LIGHT, DARK } = SystemThemeEnum
+    useTheme().switchTheme(useSettingStore().systemThemeType === LIGHT ? DARK : LIGHT)
+  }
+</script>
+
+<style lang="scss" scoped>
+  @use './index';
+</style>
